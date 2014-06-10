@@ -77,7 +77,9 @@ namespace DBVer
 
             foreach (string s in strings)
             {
-                result.Append(s);
+                var body = s.Replace("\r", "").Replace("\n", "\r\n").Replace("\t", "    ");
+
+                result.Append(body);
 
                 if (s.StartsWith("SET QUOTED_IDENTIFIER") || s.StartsWith("SET ANSI_NULLS"))
                     result.Append(System.Environment.NewLine + "GO");
