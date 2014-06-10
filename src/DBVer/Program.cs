@@ -78,6 +78,7 @@ namespace DBVer
             foreach (string s in strings)
             {
                 var body = s.Replace("\r", "").Replace("\n", "\r\n").Replace("\t", "    ");
+                body = body.TrimEnd(new char[] { ' ', '\t' });
 
                 result.Append(body);
 
