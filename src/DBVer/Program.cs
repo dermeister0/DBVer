@@ -100,7 +100,8 @@ namespace DBVer
             }
 
             Database db = server.Databases[dbName];
-            var objectsTable = db.EnumObjects();
+            var objectsTable = db.EnumObjects(DatabaseObjectTypes.Table | DatabaseObjectTypes.View
+                | DatabaseObjectTypes.StoredProcedure | DatabaseObjectTypes.UserDefinedFunction);
 
             DataView filteredView = new DataView(objectsTable);
             filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] <> 'sys'";
