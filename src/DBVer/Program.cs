@@ -19,6 +19,8 @@ namespace DBVer
             new Program().Run(args);
         }
 
+        bool skipUseStatement = false;
+
         void Run(string[] args)
         {
             string serverHost = null, userName = null, password = null;
@@ -33,6 +35,7 @@ namespace DBVer
                     { "p|password=", "{PASSWORD}", v => password = v },
                     { "o|output=", "{DIR} for exported scripts", v => outputDir = v },
                     { "db|database=", "{DATABASE} name to process", v => databases.Add(v) },
+                    { "skip-use", v => skipUseStatement = v != null }
                 };
 
             try
@@ -72,8 +75,11 @@ namespace DBVer
 
         void AddLines(StringBuilder result, StringCollection strings, string dbName)
         {
-            result.AppendLine("USE [" + dbName + "]");
-            result.AppendLine("GO");
+            if (!skipUseStatement)
+            {
+                result.AppendLine("USE [" + dbName + "]");
+                result.AppendLine("GO");
+            }
 
             foreach (string s in strings)
             {
