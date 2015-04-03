@@ -1,42 +1,54 @@
-﻿using Microsoft.SqlServer.Management.Common;
-using Microsoft.SqlServer.Management.Sdk.Sfc;
-using Microsoft.SqlServer.Management.Smo;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Data;
 using System.IO;
-using System.Linq;
+using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
+using Microsoft.SqlServer.Management.Common;
+using Microsoft.SqlServer.Management.Sdk.Sfc;
+using Microsoft.SqlServer.Management.Smo;
+using NDesk.Options;
 
 namespace DBVer
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        private bool skipUseStatement;
+
+        private static int Main(string[] args)
         {
-            new Program().Run(args);
+            try
+            {
+                var assemblyName = Assembly.GetExecutingAssembly().GetName();
+                Console.WriteLine(assemblyName.Name + " " + assemblyName.Version);
+
+                new Program().Run(args);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                return 1;
+            }
         }
 
-        bool skipUseStatement = false;
-
-        void Run(string[] args)
+        private void Run(string[] args)
         {
             string serverHost = null, userName = null, password = null;
 
             string outputDir = null;
-            List<string> databases = new List<string>();
+            var databases = new List<string>();
 
-            var set = new NDesk.Options.OptionSet
-                {
-                    { "s|server=", "Server {HOST}", v => serverHost = v },
-                    { "u|username=", "{USERNAME}", v => userName = v },
-                    { "p|password=", "{PASSWORD}", v => password = v },
-                    { "o|output=", "{DIR} for exported scripts", v => outputDir = v },
-                    { "db|database=", "{DATABASE} name to process", v => databases.Add(v) },
-                    { "skip-use", v => skipUseStatement = v != null }
-                };
+            var set = new OptionSet
+            {
+                {"s|server=", "Server {HOST}", v => serverHost = v},
+                {"u|username=", "{USERNAME}", v => userName = v},
+                {"p|password=", "{PASSWORD}", v => password = v},
+                {"o|output=", "{DIR} for exported scripts", v => outputDir = v},
+                {"db|database=", "{DATABASE} name to process", v => databases.Add(v)},
+                {"skip-use", v => skipUseStatement = v != null}
+            };
 
             try
             {
@@ -66,14 +78,14 @@ namespace DBVer
 
             foreach (var dbName in databases)
             {
-                string path = Path.Combine(outputDir, dbName);
+                var path = Path.Combine(outputDir, dbName);
                 Directory.CreateDirectory(path);
 
                 ProcessDatabase(server, dbName, path);
             }
         }
 
-        void AddLines(StringBuilder result, StringCollection strings, string dbName)
+        private void AddLines(StringBuilder result, StringCollection strings, string dbName)
         {
             if (!skipUseStatement)
             {
@@ -81,23 +93,23 @@ namespace DBVer
                 result.AppendLine("GO");
             }
 
-            foreach (string s in strings)
+            foreach (var s in strings)
             {
                 var body = s.Replace("\r", "").Replace("\n", "\r\n").Replace("\t", "    ");
-                body = body.TrimEnd(new char[] { ' ', '\t' });
+                body = body.TrimEnd(' ', '\t');
 
                 result.Append(body);
 
                 if (s.StartsWith("SET QUOTED_IDENTIFIER") || s.StartsWith("SET ANSI_NULLS"))
-                    result.Append(System.Environment.NewLine + "GO");
+                    result.Append(Environment.NewLine + "GO");
 
-                result.Append(System.Environment.NewLine);
+                result.Append(Environment.NewLine);
             }
 
             result.AppendLine("GO");
         }
 
-        void ProcessDatabase(Server server, string dbName, string outputDir)
+        private void ProcessDatabase(Server server, string dbName, string outputDir)
         {
             if (!server.Databases.Contains(dbName))
             {
@@ -105,16 +117,17 @@ namespace DBVer
                 return;
             }
 
-            Database db = server.Databases[dbName];
+            var db = server.Databases[dbName];
             var objectsTable = db.EnumObjects(DatabaseObjectTypes.Table | DatabaseObjectTypes.View
-                | DatabaseObjectTypes.StoredProcedure | DatabaseObjectTypes.UserDefinedFunction);
+                                              | DatabaseObjectTypes.StoredProcedure |
+                                              DatabaseObjectTypes.UserDefinedFunction);
 
-            DataView filteredView = new DataView(objectsTable);
+            var filteredView = new DataView(objectsTable);
             filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] <> 'sys'";
 
             filteredView.RowFilter += " AND [Schema] = 'dbo' ";
 
-            ScriptingOptions baseOptions = new ScriptingOptions();
+            var baseOptions = new ScriptingOptions();
             baseOptions.IncludeHeaders = false;
             baseOptions.Indexes = true;
             baseOptions.DriAllKeys = true;
@@ -127,14 +140,15 @@ namespace DBVer
             var scripter = new Scripter(server);
             scripter.Options = baseOptions;
 
-            Urn[] urns = new Urn[1];
+            var urns = new Urn[1];
             var result = new StringBuilder();
-            int i = 1;
+            var i = 1;
 
             foreach (DataRowView row in filteredView)
             {
-                string objectName = row["Name"].ToString().Replace("\r\n", "");
-                Console.WriteLine("{0:00000} [{1}].[{2}]   {3}", i++, row["Schema"], objectName, row["DatabaseObjectTypes"]);
+                var objectName = row["Name"].ToString().Replace("\r\n", "");
+                Console.WriteLine("{0:00000} [{1}].[{2}]   {3}", i++, row["Schema"], objectName,
+                    row["DatabaseObjectTypes"]);
 
                 urns[0] = row["Urn"].ToString();
 
@@ -143,7 +157,7 @@ namespace DBVer
 
                 AddLines(result, lines, dbName);
 
-                string fileName = string.Format("{0}\\{1}.sql", outputDir, objectName);
+                var fileName = string.Format("{0}\\{1}.sql", outputDir, objectName);
                 File.WriteAllText(fileName, result.ToString());
             }
         }
