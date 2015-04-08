@@ -143,11 +143,12 @@ namespace DBVer
             var urns = new Urn[1];
             var result = new StringBuilder();
             var i = 1;
+            var totalRows = filteredView.Count;
 
             foreach (DataRowView row in filteredView)
             {
                 var objectName = row["Name"].ToString().Replace("\r\n", "");
-                Console.WriteLine("{0:00000} [{1}].[{2}]   {3}", i++, row["Schema"], objectName,
+                Console.WriteLine("{0:00000}/{1:00000} [{2}].[{3}]   {4}", i++, totalRows, row["Schema"], objectName,
                     row["DatabaseObjectTypes"]);
 
                 urns[0] = row["Urn"].ToString();
