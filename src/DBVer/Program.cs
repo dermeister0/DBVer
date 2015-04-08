@@ -157,8 +157,30 @@ namespace DBVer
 
                 AddLines(result, lines, dbName);
 
-                var fileName = string.Format("{0}\\{1}.sql", outputDir, objectName);
+                string path = Path.Combine(outputDir, GetFolderByType((DatabaseObjectTypes) Enum.Parse(typeof(DatabaseObjectTypes), row["DatabaseObjectTypes"].ToString())));
+
+                if (!Directory.Exists(path))
+                    Directory.CreateDirectory(path);
+
+                string fileName = Path.Combine(path, string.Format("{0}.sql", objectName));
                 File.WriteAllText(fileName, result.ToString());
+            }
+        }
+
+        private string GetFolderByType(DatabaseObjectTypes type)
+        {
+            switch (type)
+            {
+                case DatabaseObjectTypes.Table:
+                    return "T";
+                case DatabaseObjectTypes.View:
+                    return "V";
+                case DatabaseObjectTypes.StoredProcedure:
+                    return "P";
+                case DatabaseObjectTypes.UserDefinedFunction:
+                    return "F";
+                default:
+                    return "_";
             }
         }
     }
