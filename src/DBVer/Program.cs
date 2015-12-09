@@ -15,6 +15,9 @@ namespace DBVer
     internal class Program
     {
         private bool skipUseStatement;
+        private int currentIndex;
+        private int totalRows;
+        private const string TriggerObjectType = "Trigger";
 
         private static int Main(string[] args)
         {
@@ -119,13 +122,11 @@ namespace DBVer
 
             var db = server.Databases[dbName];
             var objectsTable = db.EnumObjects(DatabaseObjectTypes.Table | DatabaseObjectTypes.View
-                                              | DatabaseObjectTypes.StoredProcedure |
-                                              DatabaseObjectTypes.UserDefinedFunction);
+                                              | DatabaseObjectTypes.StoredProcedure | DatabaseObjectTypes.UserDefinedFunction);
 
             var filteredView = new DataView(objectsTable);
-            filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] <> 'sys'";
-
-            filteredView.RowFilter += " AND [Schema] = 'dbo' ";
+            filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] NOT IN ('sys', 'guest', 'INFORMATION_SCHEMA') " +
+                " AND [Schema] NOT LIKE 'db_%'";
 
             var baseOptions = new ScriptingOptions();
             baseOptions.IncludeHeaders = false;
@@ -141,30 +142,26 @@ namespace DBVer
             scripter.Options = baseOptions;
 
             var urns = new Urn[1];
-            var result = new StringBuilder();
-            var i = 1;
-            var totalRows = filteredView.Count;
+
+            currentIndex = 1;
+            totalRows = filteredView.Count;
 
             foreach (DataRowView row in filteredView)
             {
                 var objectName = row["Name"].ToString().Replace("\r\n", "");
-                Console.WriteLine("{0:00000}/{1:00000} [{2}].[{3}]   {4}", i++, totalRows, row["Schema"], objectName,
-                    row["DatabaseObjectTypes"]);
+                var objectType = row["DatabaseObjectTypes"] as string;
+                var schema = row["Schema"] as string;
+                WriteLog(schema, objectName, objectType);
 
                 urns[0] = row["Urn"].ToString();
 
                 var lines = scripter.Script(urns);
-                result.Clear();
+                WriteResult(lines, objectName, objectType, dbName, outputDir);
 
-                AddLines(result, lines, dbName);
-
-                string path = Path.Combine(outputDir, GetFolderByType((DatabaseObjectTypes) Enum.Parse(typeof(DatabaseObjectTypes), row["DatabaseObjectTypes"].ToString())));
-
-                if (!Directory.Exists(path))
-                    Directory.CreateDirectory(path);
-
-                string fileName = Path.Combine(path, string.Format("{0}.sql", objectName));
-                File.WriteAllText(fileName, result.ToString());
+                if (ParseObjectType(objectType) == DatabaseObjectTypes.Table)
+                {
+                    ExportTriggers(db, schema, objectName, scripter, outputDir);
+                }
             }
         }
 
@@ -183,6 +180,47 @@ namespace DBVer
                 default:
                     return "_";
             }
+        }
+
+        private void ExportTriggers(Database db, string schema, string tableName, Scripter scripter, string outputDir)
+        {
+            string dbName = db.Name;
+            var table = db.Tables[tableName, schema];
+            var urns = new Urn[1];
+
+            foreach (Trigger trigger in table.Triggers)
+            {
+                Console.WriteLine($"    [{schema}].{trigger.Name}   {TriggerObjectType}");
+
+                urns[0] = trigger.Urn;
+                var lines = scripter.Script(urns);
+                WriteResult(lines, trigger.Name, TriggerObjectType, dbName, outputDir);
+            }
+        }
+
+        private void WriteLog(string schema, string objectName, string objectType)
+        {
+            Console.WriteLine("{0:00000}/{1:00000} [{2}].[{3}]   {4}", currentIndex++, totalRows, schema, objectName, objectType);
+        }
+
+        DatabaseObjectTypes ParseObjectType(string objectType)
+        {
+            return (DatabaseObjectTypes) Enum.Parse(typeof (DatabaseObjectTypes), objectType);
+        }
+
+        private void WriteResult(StringCollection lines, string objectName, string objectType, string dbName, string outputDir)
+        {
+            var result = new StringBuilder();
+            AddLines(result, lines, dbName);
+
+            var subDir = string.CompareOrdinal(objectType, TriggerObjectType) == 0 ? "Tr" : GetFolderByType(ParseObjectType(objectType));
+            string path = Path.Combine(outputDir, subDir);
+
+            if (!Directory.Exists(path))
+                Directory.CreateDirectory(path);
+
+            string fileName = Path.Combine(path, $"{objectName}.sql");
+            File.WriteAllText(fileName, result.ToString());
         }
     }
 }
