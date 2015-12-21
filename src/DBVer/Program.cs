@@ -25,6 +25,8 @@ namespace DBVer
             {
                 var assemblyName = Assembly.GetExecutingAssembly().GetName();
                 Console.WriteLine(assemblyName.Name + " " + assemblyName.Version);
+                Console.WriteLine("https://github.com/dermeister0/DBVer");
+                Console.WriteLine("");
 
                 new Program().Run(args);
                 return 0;
@@ -53,27 +55,33 @@ namespace DBVer
                 {"skip-use", v => skipUseStatement = v != null}
             };
 
+            if (args.Length == 0)
+            {
+                WriteHelp(set);
+                return;
+            }
+
             try
             {
                 set.Parse(args);
             }
             catch
             {
-                var writer = new StringWriter();
-                set.WriteOptionDescriptions(writer);
-                Console.Write(writer.ToString());
+                WriteHelp(set);
                 return;
             }
 
             if (serverHost == null || userName == null || password == null || outputDir == null)
             {
                 Console.WriteLine("Not all required params are specified.");
+                WriteHelp(set);
                 return;
             }
 
             if (databases.Count == 0)
             {
                 Console.WriteLine("Add at least one database.");
+                WriteHelp(set);
                 return;
             }
 
@@ -86,6 +94,13 @@ namespace DBVer
 
                 ProcessDatabase(server, dbName, path);
             }
+        }
+
+        private void WriteHelp(OptionSet set)
+        {
+            var writer = new StringWriter();
+            set.WriteOptionDescriptions(writer);
+            Console.Write(writer.ToString());
         }
 
         private void AddLines(StringBuilder result, StringCollection strings, string dbName)
