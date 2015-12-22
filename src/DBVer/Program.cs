@@ -179,6 +179,16 @@ namespace DBVer
                 if (processedMap.Contains(schema, newName, objectType))
                     continue;
 
+                if (objectType == ObjectType.StoredProcedure)
+                {
+                    var sp = db.StoredProcedures[objectName, schema];
+                    if (sp.ImplementationType != ImplementationType.TransactSql)
+                    {
+                        Console.WriteLine($"Skipped unsupported type: {sp.ImplementationType}");
+                        continue;
+                    }
+                }
+
                 urns[0] = row["Urn"].ToString();
 
                 var lines = scripter.Script(urns);
