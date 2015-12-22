@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Configuration;
 using System.Data;
 using System.IO;
 using System.Linq;
@@ -8,7 +9,6 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using DBVer.Mapping;
-using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
 using Microsoft.SqlServer.Management.Smo;
 using NDesk.Options;
@@ -135,60 +135,59 @@ namespace DBVer
 
         private void ProcessDatabase(string dbName, string outputDir, string serverHost, string userName, string password)
         {
-            var server = new Server(new ServerConnection(serverHost, userName, password));
+            var mainServerInfo = new ServerInfo(serverHost, userName, password);
 
-            if (!server.Databases.Contains(dbName))
+            try
             {
-                Console.WriteLine("Database {0} is absent.", dbName);
-                return;
+                if (!mainServerInfo.Server.Databases.Contains(dbName))
+                {
+                    Console.WriteLine("Database {0} is absent.", dbName);
+                    return;
+                }
+
+                var db = mainServerInfo.Server.Databases[dbName];
+                var objectsTable = db.EnumObjects(DatabaseObjectTypes.Table | DatabaseObjectTypes.View
+                                                  | DatabaseObjectTypes.StoredProcedure | DatabaseObjectTypes.UserDefinedFunction);
+
+                var filteredView = new DataView(objectsTable);
+                filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] NOT IN ('sys', 'guest', 'INFORMATION_SCHEMA') " +
+                    " AND [Schema] NOT LIKE 'db_%'";
+
+                currentIndex = 1;
+                totalRows = filteredView.Count;
+
+                var options = new ParallelOptions() {  MaxDegreeOfParallelism = bool.Parse(ConfigurationManager.AppSettings["SingleThread"]) ? 1 : -1 };
+
+                Parallel.ForEach(filteredView.Cast<DataRowView>(),
+                    options,
+                    () => new ServerInfo(serverHost, userName, password),
+                    (row, state, i, info) =>
+                        {
+                            var objectName = row["Name"].ToString().Replace("\r\n", "");
+                            var objectType = ParseObjectType(row["DatabaseObjectTypes"] as string);
+                            var schema = row["Schema"] as string;
+                            var urn = row["Urn"] as string;
+
+                            ProcessObject(info, urn, schema, objectName, objectType, dbName, outputDir);
+
+                            return info;
+                        }, serverInfo => { serverInfo.Disconnect(); });
             }
-
-            var db = server.Databases[dbName];
-            var objectsTable = db.EnumObjects(DatabaseObjectTypes.Table | DatabaseObjectTypes.View
-                                              | DatabaseObjectTypes.StoredProcedure | DatabaseObjectTypes.UserDefinedFunction);
-
-            var filteredView = new DataView(objectsTable);
-            filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] NOT IN ('sys', 'guest', 'INFORMATION_SCHEMA') " +
-                " AND [Schema] NOT LIKE 'db_%'";
-
-            var baseOptions = new ScriptingOptions();
-            baseOptions.IncludeHeaders = false;
-            baseOptions.Indexes = true;
-            baseOptions.DriAllKeys = true;
-            baseOptions.NoCollation = false;
-            baseOptions.SchemaQualify = true;
-            baseOptions.SchemaQualifyForeignKeysReferences = true;
-            baseOptions.Permissions = false;
-            baseOptions.Encoding = Encoding.UTF8;
-
-            currentIndex = 1;
-            totalRows = filteredView.Count;
-
-            Parallel.ForEach(filteredView.Cast<DataRowView>(), row =>
+            finally
             {
-                var objectName = row["Name"].ToString().Replace("\r\n", "");
-                var objectType = ParseObjectType(row["DatabaseObjectTypes"] as string);
-                var schema = row["Schema"] as string;
-                var urn = row["Urn"] as string;
-
-                var server2 = new Server(new ServerConnection(serverHost, userName, password));
-
-                var scripter = new Scripter(server2);
-                scripter.Options = baseOptions;
-
-                ProcessObject(server2.Databases[dbName], urn, schema, objectName, objectType, outputDir, scripter);
-
-                server2.ConnectionContext.Disconnect();
-            });
+                mainServerInfo.Disconnect();
+            }
         }
 
-        private void ProcessObject(Database db, string urn, string schema, string objectName, ObjectType objectType, string outputDir, Scripter scripter)
+        private void ProcessObject(ServerInfo info, string urn, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
         {
             var newName = nameReplacer.ReplaceName(objectName, objectType);
             WriteLog(schema, string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName, objectType);
 
             if (processedMap.Contains(schema, newName, objectType))
                 return;
+
+            var db = info.Server.Databases[dbName];
 
             if (objectType == ObjectType.StoredProcedure)
             {
@@ -203,12 +202,12 @@ namespace DBVer
             var urns = new Urn[1];
             urns[0] = urn;
 
-            var lines = scripter.Script(urns);
+            var lines = info.Scripter.Script(urns);
             WriteResult(lines, schema, newName, objectType, db.Name, outputDir);
 
             if (objectType == ObjectType.Table)
             {
-                ExportTriggers(db, schema, objectName, outputDir, scripter);
+                ExportTriggers(db, schema, objectName, outputDir, info.Scripter);
             }
         }
 
