@@ -5,6 +5,7 @@ using System.Data;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using DBVer.Mapping;
 using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
@@ -20,6 +21,7 @@ namespace DBVer
         private int totalRows;
         private NameReplacer nameReplacer;
         private ProcessedMap processedMap;
+        private object lockObject = new object();
 
         private static int Main(string[] args)
         {
@@ -157,27 +159,35 @@ namespace DBVer
             baseOptions.Permissions = false;
             baseOptions.Encoding = Encoding.UTF8;
 
-            var scripter = new Scripter(server);
-            scripter.Options = baseOptions;
-
-            var urns = new Urn[1];
-
             currentIndex = 1;
             totalRows = filteredView.Count;
 
-            foreach (DataRowView row in filteredView)
+            Parallel.ForEach(filteredView.Table.AsEnumerable(), row =>
             {
                 var objectName = row["Name"].ToString().Replace("\r\n", "");
                 var objectType = ParseObjectType(row["DatabaseObjectTypes"] as string);
                 var schema = row["Schema"] as string;
+                var urn = row["Urn"] as string;
 
-                var newName = nameReplacer.ReplaceName(objectName, objectType);
+                var scripter = new Scripter(server);
+                scripter.Options = baseOptions;
+
+                ProcessObject(db, urn, schema, objectName, objectType, dbName, outputDir, scripter);
+            });
+        }
+
+        private void ProcessObject(Database db, string urn, string schema, string objectName, ObjectType objectType, string dbName, string outputDir, Scripter scripter)
+        {
+            var newName = nameReplacer.ReplaceName(objectName, objectType);
+
+            lock (lockObject)
+            {
                 WriteLog(schema,
                     string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName,
                     objectType);
 
                 if (processedMap.Contains(schema, newName, objectType))
-                    continue;
+                    return;
 
                 if (objectType == ObjectType.StoredProcedure)
                 {
@@ -185,19 +195,20 @@ namespace DBVer
                     if (sp.ImplementationType != ImplementationType.TransactSql)
                     {
                         Console.WriteLine($"Skipped unsupported type: {sp.ImplementationType}");
-                        continue;
+                        return;
                     }
                 }
+            }
 
-                urns[0] = row["Urn"].ToString();
+            var urns = new Urn[1];
+            urns[0] = urn;
 
-                var lines = scripter.Script(urns);
-                WriteResult(lines, schema, newName, objectType, dbName, outputDir);
+            var lines = scripter.Script(urns);
+            WriteResult(lines, schema, newName, objectType, dbName, outputDir);
 
-                if (objectType == ObjectType.Table)
-                {
-                    ExportTriggers(db, schema, objectName, scripter, outputDir);
-                }
+            if (objectType == ObjectType.Table)
+            {
+                ExportTriggers(db, schema, objectName, outputDir, scripter);
             }
         }
 
@@ -220,7 +231,7 @@ namespace DBVer
             }
         }
 
-        private void ExportTriggers(Database db, string schema, string tableName, Scripter scripter, string outputDir)
+        private void ExportTriggers(Database db, string schema, string tableName, string outputDir, Scripter scripter)
         {
             string dbName = db.Name;
             var table = db.Tables[tableName, schema];
@@ -269,7 +280,10 @@ namespace DBVer
             string fileName = Path.Combine(path, $"{objectName}.sql");
             File.WriteAllText(fileName, result.ToString());
 
-            processedMap.Add(schema, objectName, objectType);
+            lock (lockObject)
+            {
+                processedMap.Add(schema, objectName, objectType);
+            }
         }
     }
 }
