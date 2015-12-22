@@ -3,3 +3,4 @@ src/DBVer/bin/
 src/DBVer/packages/
 src/DBVer/.vs/
 *.orig
+*.user

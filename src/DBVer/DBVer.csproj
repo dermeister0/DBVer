@@ -63,6 +63,8 @@
     <Compile Include="Configuration\NameReplacementGroupCollection.cs" />
     <Compile Include="Configuration\NameReplacementGroup.cs" />
     <Compile Include="Configuration\NameReplacementDefinition.cs" />
+    <Compile Include="Mapping\NameReplacer.cs" />
+    <Compile Include="Mapping\ProcessedMap.cs" />
     <Compile Include="ObjectType.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
