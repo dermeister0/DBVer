@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Data;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using DBVer.Mapping;
 using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
@@ -20,6 +22,7 @@ namespace DBVer
         private int totalRows;
         private NameReplacer nameReplacer;
         private ProcessedMap processedMap;
+        private readonly object lockObject = new object();
 
         private static int Main(string[] args)
         {
@@ -87,7 +90,6 @@ namespace DBVer
                 return;
             }
 
-            var server = new Server(new ServerConnection(serverHost, userName, password));
             nameReplacer = new NameReplacer();
 
             foreach (var dbName in databases)
@@ -96,7 +98,7 @@ namespace DBVer
                 Directory.CreateDirectory(path);
 
                 processedMap = new ProcessedMap();
-                ProcessDatabase(server, dbName, path);
+                ProcessDatabase(dbName, path, serverHost, userName, password);
             }
         }
 
@@ -131,8 +133,10 @@ namespace DBVer
             result.AppendLine("GO");
         }
 
-        private void ProcessDatabase(Server server, string dbName, string outputDir)
+        private void ProcessDatabase(string dbName, string outputDir, string serverHost, string userName, string password)
         {
+            var server = new Server(new ServerConnection(serverHost, userName, password));
+
             if (!server.Databases.Contains(dbName))
             {
                 Console.WriteLine("Database {0} is absent.", dbName);
@@ -157,47 +161,54 @@ namespace DBVer
             baseOptions.Permissions = false;
             baseOptions.Encoding = Encoding.UTF8;
 
-            var scripter = new Scripter(server);
-            scripter.Options = baseOptions;
-
-            var urns = new Urn[1];
-
             currentIndex = 1;
             totalRows = filteredView.Count;
 
-            foreach (DataRowView row in filteredView)
+            Parallel.ForEach(filteredView.Cast<DataRowView>(), row =>
             {
                 var objectName = row["Name"].ToString().Replace("\r\n", "");
                 var objectType = ParseObjectType(row["DatabaseObjectTypes"] as string);
                 var schema = row["Schema"] as string;
+                var urn = row["Urn"] as string;
 
-                var newName = nameReplacer.ReplaceName(objectName, objectType);
-                WriteLog(schema,
-                    string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName,
-                    objectType);
+                var server2 = new Server(new ServerConnection(serverHost, userName, password));
 
-                if (processedMap.Contains(schema, newName, objectType))
-                    continue;
+                var scripter = new Scripter(server2);
+                scripter.Options = baseOptions;
 
-                if (objectType == ObjectType.StoredProcedure)
+                ProcessObject(server2.Databases[dbName], urn, schema, objectName, objectType, outputDir, scripter);
+
+                server2.ConnectionContext.Disconnect();
+            });
+        }
+
+        private void ProcessObject(Database db, string urn, string schema, string objectName, ObjectType objectType, string outputDir, Scripter scripter)
+        {
+            var newName = nameReplacer.ReplaceName(objectName, objectType);
+            WriteLog(schema, string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName, objectType);
+
+            if (processedMap.Contains(schema, newName, objectType))
+                return;
+
+            if (objectType == ObjectType.StoredProcedure)
+            {
+                var sp = db.StoredProcedures[objectName, schema];
+                if (sp.ImplementationType != ImplementationType.TransactSql)
                 {
-                    var sp = db.StoredProcedures[objectName, schema];
-                    if (sp.ImplementationType != ImplementationType.TransactSql)
-                    {
-                        Console.WriteLine($"Skipped unsupported type: {sp.ImplementationType}");
-                        continue;
-                    }
+                    Console.WriteLine($"Skipped unsupported type: {sp.ImplementationType}");
+                    return;
                 }
+            }
 
-                urns[0] = row["Urn"].ToString();
+            var urns = new Urn[1];
+            urns[0] = urn;
 
-                var lines = scripter.Script(urns);
-                WriteResult(lines, schema, newName, objectType, dbName, outputDir);
+            var lines = scripter.Script(urns);
+            WriteResult(lines, schema, newName, objectType, db.Name, outputDir);
 
-                if (objectType == ObjectType.Table)
-                {
-                    ExportTriggers(db, schema, objectName, scripter, outputDir);
-                }
+            if (objectType == ObjectType.Table)
+            {
+                ExportTriggers(db, schema, objectName, outputDir, scripter);
             }
         }
 
@@ -220,22 +231,18 @@ namespace DBVer
             }
         }
 
-        private void ExportTriggers(Database db, string schema, string tableName, Scripter scripter, string outputDir)
+        private void ExportTriggers(Database db, string schema, string tableName, string outputDir, Scripter scripter)
         {
             string dbName = db.Name;
-            var table = db.Tables[tableName, schema];
+            var table = db.Tables[tableName, schema];          
             var urns = new Urn[1];
             var objectType = ObjectType.Trigger;
 
             foreach (Trigger trigger in table.Triggers)
             {
                 var newName = nameReplacer.ReplaceName(trigger.Name, objectType);
-
-                var changedName = string.CompareOrdinal(trigger.Name, newName) != 0
-                    ? $"{trigger.Name} -> {newName}"
-                    : newName;
-
-                Console.WriteLine($"    [{schema}].{changedName}   {objectType}");
+                var changedName = string.CompareOrdinal(trigger.Name, newName) != 0 ? $"{trigger.Name} -> {newName}" : newName;
+                Console.WriteLine($"    [{schema}].[{changedName}]   {objectType}");
 
                 if (processedMap.Contains(schema, newName, objectType))
                     continue;
@@ -248,7 +255,10 @@ namespace DBVer
 
         private void WriteLog(string schema, string objectName, ObjectType objectType)
         {
-            Console.WriteLine("{0:00000}/{1:00000} [{2}].[{3}]   {4}", currentIndex++, totalRows, schema, objectName, objectType);
+            lock (lockObject)
+            {
+                Console.WriteLine("{0:00000}/{1:00000} [{2}].[{3}]   {4}", currentIndex++, totalRows, schema, objectName, objectType);
+            }
         }
 
         ObjectType ParseObjectType(string objectType)
