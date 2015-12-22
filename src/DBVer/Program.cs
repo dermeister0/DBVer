@@ -5,6 +5,7 @@ using System.Data;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using DBVer.Mapping;
 using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
 using Microsoft.SqlServer.Management.Smo;
@@ -17,7 +18,8 @@ namespace DBVer
         private bool skipUseStatement;
         private int currentIndex;
         private int totalRows;
-        private const string TriggerObjectType = "Trigger";
+        private NameReplacer nameReplacer;
+        private ProcessedMap processedMap;
 
         private static int Main(string[] args)
         {
@@ -86,12 +88,14 @@ namespace DBVer
             }
 
             var server = new Server(new ServerConnection(serverHost, userName, password));
+            nameReplacer = new NameReplacer();
 
             foreach (var dbName in databases)
             {
                 var path = Path.Combine(outputDir, dbName);
                 Directory.CreateDirectory(path);
 
+                processedMap = new ProcessedMap();
                 ProcessDatabase(server, dbName, path);
             }
         }
@@ -164,34 +168,43 @@ namespace DBVer
             foreach (DataRowView row in filteredView)
             {
                 var objectName = row["Name"].ToString().Replace("\r\n", "");
-                var objectType = row["DatabaseObjectTypes"] as string;
+                var objectType = ParseObjectType(row["DatabaseObjectTypes"] as string);
                 var schema = row["Schema"] as string;
-                WriteLog(schema, objectName, objectType);
+
+                var newName = nameReplacer.ReplaceName(objectName, objectType);
+                WriteLog(schema,
+                    string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName,
+                    objectType);
+
+                if (processedMap.Contains(schema, newName, objectType))
+                    continue;
 
                 urns[0] = row["Urn"].ToString();
 
                 var lines = scripter.Script(urns);
-                WriteResult(lines, objectName, objectType, dbName, outputDir);
+                WriteResult(lines, schema, newName, objectType, dbName, outputDir);
 
-                if (ParseObjectType(objectType) == DatabaseObjectTypes.Table)
+                if (objectType == ObjectType.Table)
                 {
                     ExportTriggers(db, schema, objectName, scripter, outputDir);
                 }
             }
         }
 
-        private string GetFolderByType(DatabaseObjectTypes type)
+        private string GetFolderByType(ObjectType type)
         {
             switch (type)
             {
-                case DatabaseObjectTypes.Table:
+                case ObjectType.Table:
                     return "T";
-                case DatabaseObjectTypes.View:
+                case ObjectType.View:
                     return "V";
-                case DatabaseObjectTypes.StoredProcedure:
+                case ObjectType.StoredProcedure:
                     return "P";
-                case DatabaseObjectTypes.UserDefinedFunction:
+                case ObjectType.UserDefinedFunction:
                     return "F";
+                case ObjectType.Trigger:
+                    return "Tr";
                 default:
                     return "_";
             }
@@ -202,40 +215,51 @@ namespace DBVer
             string dbName = db.Name;
             var table = db.Tables[tableName, schema];
             var urns = new Urn[1];
+            var objectType = ObjectType.Trigger;
 
             foreach (Trigger trigger in table.Triggers)
             {
-                Console.WriteLine($"    [{schema}].{trigger.Name}   {TriggerObjectType}");
+                var newName = nameReplacer.ReplaceName(trigger.Name, objectType);
+
+                var changedName = string.CompareOrdinal(trigger.Name, newName) != 0
+                    ? $"{trigger.Name} -> {newName}"
+                    : newName;
+
+                Console.WriteLine($"    [{schema}].{changedName}   {objectType}");
+
+                if (processedMap.Contains(schema, newName, objectType))
+                    continue;
 
                 urns[0] = trigger.Urn;
                 var lines = scripter.Script(urns);
-                WriteResult(lines, trigger.Name, TriggerObjectType, dbName, outputDir);
+                WriteResult(lines, schema, newName, objectType, dbName, outputDir);
             }
         }
 
-        private void WriteLog(string schema, string objectName, string objectType)
+        private void WriteLog(string schema, string objectName, ObjectType objectType)
         {
             Console.WriteLine("{0:00000}/{1:00000} [{2}].[{3}]   {4}", currentIndex++, totalRows, schema, objectName, objectType);
         }
 
-        DatabaseObjectTypes ParseObjectType(string objectType)
+        ObjectType ParseObjectType(string objectType)
         {
-            return (DatabaseObjectTypes) Enum.Parse(typeof (DatabaseObjectTypes), objectType);
+            return (ObjectType) Enum.Parse(typeof (ObjectType), objectType);
         }
 
-        private void WriteResult(StringCollection lines, string objectName, string objectType, string dbName, string outputDir)
+        private void WriteResult(StringCollection lines, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
         {
             var result = new StringBuilder();
             AddLines(result, lines, dbName);
 
-            var subDir = string.CompareOrdinal(objectType, TriggerObjectType) == 0 ? "Tr" : GetFolderByType(ParseObjectType(objectType));
-            string path = Path.Combine(outputDir, subDir);
+            string path = Path.Combine(outputDir, GetFolderByType(objectType));
 
             if (!Directory.Exists(path))
                 Directory.CreateDirectory(path);
 
             string fileName = Path.Combine(path, $"{objectName}.sql");
             File.WriteAllText(fileName, result.ToString());
+
+            processedMap.Add(schema, objectName, objectType);
         }
     }
 }
