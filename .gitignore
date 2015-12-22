@@ -4,3 +4,4 @@ src/DBVer/packages/
 src/DBVer/.vs/
 *.orig
 *.user
+src/DBVer/Properties/HeavysoftVersion.cs
