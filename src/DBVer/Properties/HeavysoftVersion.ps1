@@ -7,7 +7,7 @@
 
 $major    = 1
 $minor    = 5
-$revision = 0
+$revision = 1
 
 #-------------------------------------------------------------------------------
 # Displays how to use this script.
