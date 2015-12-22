@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Configuration;
 using System.Data;
 using System.IO;
 using System.Linq;
@@ -8,7 +9,6 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using DBVer.Mapping;
-using Microsoft.SqlServer.Management.Common;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
 using Microsoft.SqlServer.Management.Smo;
 using NDesk.Options;
@@ -156,7 +156,10 @@ namespace DBVer
                 currentIndex = 1;
                 totalRows = filteredView.Count;
 
+                var options = new ParallelOptions() {  MaxDegreeOfParallelism = bool.Parse(ConfigurationManager.AppSettings["SingleThread"]) ? 1 : -1 };
+
                 Parallel.ForEach(filteredView.Cast<DataRowView>(),
+                    options,
                     () => new ServerInfo(serverHost, userName, password),
                     (row, state, i, info) =>
                         {
