@@ -235,7 +235,7 @@ namespace DBVer
                     ? $"{trigger.Name} -> {newName}"
                     : newName;
 
-                Console.WriteLine($"    [{schema}].{changedName}   {objectType}");
+                Console.WriteLine($"    [{schema}].[{changedName}]   {objectType}");
 
                 if (processedMap.Contains(schema, newName, objectType))
                     continue;
