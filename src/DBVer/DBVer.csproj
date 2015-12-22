@@ -59,8 +59,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration\MappingSection.cs" />
-    <Compile Include="Configuration\NameReplacementCollection.cs" />
-    <Compile Include="Configuration\NameReplacementConfig.cs" />
+    <Compile Include="Configuration\NameReplacementDefinitionCollection.cs" />
+    <Compile Include="Configuration\NameReplacementGroupCollection.cs" />
+    <Compile Include="Configuration\NameReplacementGroup.cs" />
+    <Compile Include="Configuration\NameReplacementDefinition.cs" />
     <Compile Include="ObjectType.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

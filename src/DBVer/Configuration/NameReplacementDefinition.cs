@@ -2,15 +2,8 @@
 
 namespace DBVer.Configuration
 {
-    public class NameReplacementConfig : ConfigurationElement
+    public class NameReplacementDefinition : ConfigurationElement
     {
-        [ConfigurationProperty("type", IsRequired = true)]
-        public ObjectType Type
-        {
-            get { return (ObjectType)this["type"]; }
-            set { this["type"] = value; }
-        }
-
         [ConfigurationProperty("pattern", IsRequired = true)]
         public string Pattern
         {
@@ -21,7 +14,7 @@ namespace DBVer.Configuration
         [ConfigurationProperty("replacement", IsRequired = true)]
         public string Replacement
         {
-            get { return (string) this["replacement"]; }
+            get { return (string)this["replacement"]; }
             set { this["replacement"] = value; }
         }
     }

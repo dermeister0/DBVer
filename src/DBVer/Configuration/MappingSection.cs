@@ -7,8 +7,7 @@ namespace DBVer.Configuration
         private const string NameReplacementCollectionName = "nameReplacement";
 
         [ConfigurationProperty(NameReplacementCollectionName)]
-        [ConfigurationCollection(typeof(NameReplacementCollection))]
-        public NameReplacementCollection NameReplacementConfigs {get { return (NameReplacementCollection)base[NameReplacementCollectionName]; } }
+        public NameReplacementGroupCollection NameReplacementGroups => (NameReplacementGroupCollection)base[NameReplacementCollectionName];
 
         public static MappingSection ReadFromConfig()
         {
