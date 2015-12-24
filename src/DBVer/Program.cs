@@ -128,7 +128,7 @@ namespace DBVer
 
                 var filteredView = new DataView(objectsTable);
                 filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] NOT IN ('sys', 'guest', 'INFORMATION_SCHEMA') " +
-                    " AND [Schema] NOT LIKE 'db_%' and name = 'AppointmentChart'";
+                    " AND [Schema] NOT LIKE 'db_%'";
 
                 currentIndex = 1;
                 totalRows = filteredView.Count;
@@ -159,6 +159,9 @@ namespace DBVer
         private void ProcessObject(ServerInfo info, string urn, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
         {
             var newName = nameReplacer.ReplaceName(objectName, objectType);
+            if (string.IsNullOrEmpty(newName))
+                return;
+
             WriteLog(schema, string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName, objectType);
 
             if (processedMap.Contains(schema, newName, objectType))
@@ -198,6 +201,9 @@ namespace DBVer
             foreach (Trigger trigger in table.Triggers)
             {
                 var newName = nameReplacer.ReplaceName(trigger.Name, objectType);
+                if (string.IsNullOrEmpty(newName))
+                    continue;
+
                 var changedName = string.CompareOrdinal(trigger.Name, newName) != 0 ? $"{trigger.Name} -> {newName}" : newName;
                 Console.WriteLine($"    [{schema}].[{changedName}]   {objectType}");
 

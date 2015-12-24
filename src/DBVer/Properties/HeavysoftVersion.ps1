@@ -7,7 +7,7 @@
 
 $major    = 1
 $minor    = 5
-$revision = 4
+$revision = 5
 
 trap
 {
