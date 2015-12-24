@@ -6,7 +6,6 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using DBVer.Mapping;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
@@ -17,12 +16,12 @@ namespace DBVer
 {
     internal class Program
     {
-        private bool skipUseStatement;
         private int currentIndex;
         private int totalRows;
         private NameReplacer nameReplacer;
         private ProcessedMap processedMap;
         private readonly object lockObject = new object();
+        private Writer outputWriter;
 
         private static int Main(string[] args)
         {
@@ -46,7 +45,6 @@ namespace DBVer
         private void Run(string[] args)
         {
             string serverHost = null, userName = null, password = null;
-
             string outputDir = null;
             var databases = new List<string>();
 
@@ -57,7 +55,6 @@ namespace DBVer
                 {"p|password=", "{PASSWORD}", v => password = v},
                 {"o|output=", "{DIR} for exported scripts", v => outputDir = v},
                 {"db|database=", "{DATABASE} name to process", v => databases.Add(v)},
-                {"skip-use", v => skipUseStatement = v != null}
             };
 
             if (args.Length == 0)
@@ -90,7 +87,11 @@ namespace DBVer
                 return;
             }
 
+            bool skipUseStatement = bool.Parse(ConfigurationManager.AppSettings["SkipUseStatement"]);
+            bool multipleFilesPerObject = bool.Parse(ConfigurationManager.AppSettings["MultipleFilesPerObject"]);
+
             nameReplacer = new NameReplacer();
+            outputWriter = new Writer(skipUseStatement, multipleFilesPerObject);
 
             foreach (var dbName in databases)
             {
@@ -107,30 +108,6 @@ namespace DBVer
             var writer = new StringWriter();
             set.WriteOptionDescriptions(writer);
             Console.Write(writer.ToString());
-        }
-
-        private void AddLines(StringBuilder result, StringCollection strings, string dbName)
-        {
-            if (!skipUseStatement)
-            {
-                result.AppendLine("USE [" + dbName + "]");
-                result.AppendLine("GO");
-            }
-
-            foreach (var s in strings)
-            {
-                var body = s.Replace("\r", "").Replace("\n", "\r\n").Replace("\t", "    ");
-                body = body.TrimEnd(' ', '\t');
-
-                result.Append(body);
-
-                if (s.StartsWith("SET QUOTED_IDENTIFIER") || s.StartsWith("SET ANSI_NULLS"))
-                    result.Append(Environment.NewLine + "GO");
-
-                result.Append(Environment.NewLine);
-            }
-
-            result.AppendLine("GO");
         }
 
         private void ProcessDatabase(string dbName, string outputDir, string serverHost, string userName, string password)
@@ -151,7 +128,7 @@ namespace DBVer
 
                 var filteredView = new DataView(objectsTable);
                 filteredView.RowFilter = "[Schema] <> 'INFORMATION_SCHEMA' AND [Schema] NOT IN ('sys', 'guest', 'INFORMATION_SCHEMA') " +
-                    " AND [Schema] NOT LIKE 'db_%'";
+                    " AND [Schema] NOT LIKE 'db_%' and name = 'AppointmentChart'";
 
                 currentIndex = 1;
                 totalRows = filteredView.Count;
@@ -211,25 +188,6 @@ namespace DBVer
             }
         }
 
-        private string GetFolderByType(ObjectType type)
-        {
-            switch (type)
-            {
-                case ObjectType.Table:
-                    return "T";
-                case ObjectType.View:
-                    return "V";
-                case ObjectType.StoredProcedure:
-                    return "P";
-                case ObjectType.UserDefinedFunction:
-                    return "F";
-                case ObjectType.Trigger:
-                    return "Tr";
-                default:
-                    return "_";
-            }
-        }
-
         private void ExportTriggers(Database db, string schema, string tableName, string outputDir, Scripter scripter)
         {
             string dbName = db.Name;
@@ -267,16 +225,7 @@ namespace DBVer
 
         private void WriteResult(StringCollection lines, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
         {
-            var result = new StringBuilder();
-            AddLines(result, lines, dbName);
-
-            string path = Path.Combine(outputDir, GetFolderByType(objectType));
-
-            if (!Directory.Exists(path))
-                Directory.CreateDirectory(path);
-
-            string fileName = Path.Combine(path, $"{objectName}.sql");
-            File.WriteAllText(fileName, result.ToString());
+            outputWriter.WriteResult(lines, schema, objectName, objectType, dbName, outputDir);
 
             processedMap.Add(schema, objectName, objectType);
         }

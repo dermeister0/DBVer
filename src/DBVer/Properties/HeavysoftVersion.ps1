@@ -7,7 +7,14 @@
 
 $major    = 1
 $minor    = 5
-$revision = 3
+$revision = 4
+
+trap
+{
+    Write-Output $_
+	$host.SetShouldExit(1)
+    exit
+}
 
 #-------------------------------------------------------------------------------
 # Displays how to use this script.
