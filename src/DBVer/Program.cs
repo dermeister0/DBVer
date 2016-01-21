@@ -172,7 +172,11 @@ namespace DBVer
             if (objectType == ObjectType.StoredProcedure)
             {
                 var sp = db.StoredProcedures[objectName, schema];
-                if (sp.ImplementationType != ImplementationType.TransactSql)
+                if (sp == null)
+                {
+                    Console.WriteLine($"Warning: SP {objectName} not found.");
+                }
+                else if (sp.ImplementationType != ImplementationType.TransactSql)
                 {
                     Console.WriteLine($"Skipped unsupported type: {sp.ImplementationType}");
                     return;
