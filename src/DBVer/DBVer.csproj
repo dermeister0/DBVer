@@ -65,7 +65,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Configuration\MappingSection.cs" />
+    <Compile Include="Configuration\DictionaryDefinitionCollection.cs" />
+    <Compile Include="Configuration\DictionaryDefinition.cs" />
+    <Compile Include="Configuration\ExportSettingsSection.cs" />
     <Compile Include="Configuration\NameReplacementDefinitionCollection.cs" />
     <Compile Include="Configuration\NameReplacementGroupCollection.cs" />
     <Compile Include="Configuration\NameReplacementGroup.cs" />

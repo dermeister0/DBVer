@@ -17,9 +17,9 @@ namespace DBVer.Mapping
         private void Load()
         {
             mappings = new Dictionary<ObjectType, Dictionary<Regex, string>>();
-            var mappingSection = MappingSection.ReadFromConfig();
+            var exportSettingsSection = ExportSettingsSection.ReadFromConfig();
 
-            foreach (NameReplacementGroup group in mappingSection.NameReplacementGroups)
+            foreach (NameReplacementGroup group in exportSettingsSection.NameReplacementGroups)
             {
                 var replacementSet = group.Definitions.Cast<NameReplacementDefinition>()
                     .ToDictionary(definition => new Regex(definition.Pattern), definition => definition.Replacement);
