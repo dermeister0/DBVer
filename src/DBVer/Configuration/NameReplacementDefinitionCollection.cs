@@ -2,7 +2,7 @@
 
 namespace DBVer.Configuration
 {
-    [ConfigurationCollection(typeof(NameReplacementGroupCollection))]
+    [ConfigurationCollection(typeof(NameReplacementDefinitionCollection))]
     public class NameReplacementDefinitionCollection : ConfigurationElementCollection
     {
         protected override ConfigurationElement CreateNewElement()

@@ -12,7 +12,6 @@ namespace DBVer.Configuration
         }
 
         [ConfigurationProperty("", IsDefaultCollection = true)]
-        [ConfigurationCollection(typeof(NameReplacementDefinitionCollection))]
         public NameReplacementDefinitionCollection Definitions => (NameReplacementDefinitionCollection)base[""];
     }
 }

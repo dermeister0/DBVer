@@ -11,6 +11,9 @@ using DBVer.Mapping;
 using Microsoft.SqlServer.Management.Sdk.Sfc;
 using Microsoft.SqlServer.Management.Smo;
 using NDesk.Options;
+using DBVer.Configuration;
+using DBVer.Tools;
+using System.Data.SqlClient;
 
 namespace DBVer
 {
@@ -22,6 +25,7 @@ namespace DBVer
         private ProcessedMap processedMap;
         private readonly object lockObject = new object();
         private Writer outputWriter;
+        private DictionaryExporter dictionaryExporter;
 
         private static int Main(string[] args)
         {
@@ -90,7 +94,10 @@ namespace DBVer
             bool skipUseStatement = bool.Parse(ConfigurationManager.AppSettings["SkipUseStatement"]);
             bool multipleFilesPerObject = bool.Parse(ConfigurationManager.AppSettings["MultipleFilesPerObject"]);
 
-            nameReplacer = new NameReplacer();
+            var exportSettingsSection = ExportSettingsSection.ReadFromConfig();
+
+            nameReplacer = new NameReplacer(exportSettingsSection);
+            dictionaryExporter = new DictionaryExporter(exportSettingsSection);
             outputWriter = new Writer(skipUseStatement, multipleFilesPerObject);
 
             foreach (var dbName in databases)
@@ -153,6 +160,14 @@ namespace DBVer
             finally
             {
                 mainServerInfo.Disconnect();
+            }
+
+            var builder = new SqlConnectionStringBuilder()
+                { DataSource = serverHost, InitialCatalog = dbName, UserID = userName, Password = password };
+            using (var connection = new SqlConnection(builder.ToString()))
+            {
+                connection.Open();
+                dictionaryExporter.Run(connection, outputDir);
             }
         }
 
