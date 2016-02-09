@@ -1,7 +1,9 @@
-﻿using DBVer.Configuration;
+﻿using CsvHelper;
+using DBVer.Configuration;
 using System;
 using System.Data;
 using System.Data.SqlClient;
+using System.IO;
 
 namespace DBVer.Tools
 {
@@ -14,15 +16,19 @@ namespace DBVer.Tools
             this.exportSettingsSection = exportSettingsSection;
         }
 
-        public void Run(SqlConnection connection)
+        public void Run(SqlConnection connection, string outputDir)
         {
+            var dataDir = Path.Combine(outputDir, "Data");
+            if (!Directory.Exists(dataDir))
+                Directory.CreateDirectory(dataDir);
+
             foreach (DictionaryDefinition dictionary in exportSettingsSection.Dictionaries)
             {
-                ExportDictionary(connection, dictionary);
+                ExportDictionary(connection, dictionary, dataDir);
             }
         }
 
-        private void ExportDictionary(SqlConnection connection, DictionaryDefinition dictionary)
+        private void ExportDictionary(SqlConnection connection, DictionaryDefinition dictionary, string dataDir)
         {
             if (string.IsNullOrWhiteSpace(dictionary.Name))
                 throw new InvalidOperationException("Dictionary name is empty.");
@@ -33,38 +39,64 @@ namespace DBVer.Tools
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandType = CommandType.Text;
-                cmd.CommandText = "select '[' + S.name + '].[' + T.name + ']' FROM sys.tables T JOIN sys.schemas S ON T.schema_id = S.schema_id where T.name = @Name";
+                cmd.CommandText = "select S.name, T.name from sys.tables T JOIN sys.schemas S ON T.schema_id = S.schema_id where T.name = @Name";
                 cmd.Parameters.AddWithValue("@Name", dictionary.Name);
 
-                var fullName = cmd.ExecuteScalar();
-                if (fullName == null)
-                {
-                    Console.WriteLine("Warning: Dictionary {0} not found.", dictionary.Name);
-                    return;
-                }
-
-                Console.WriteLine(fullName);
-
-                cmd.CommandText = $"select * from {dictionary.Name}";
+                string schema;
+                string name;
                 using (var reader = cmd.ExecuteReader())
                 {
-                    for (int i = 0; i < reader.FieldCount; ++i)
+                    if (!reader.HasRows)
                     {
-                        Console.Write("{0};", reader.GetName(i));
+                        Console.WriteLine("Warning: Dictionary {0} not found.", dictionary.Name);
+                        return;
                     }
-                    Console.WriteLine();
 
-                    while (reader.Read())
+                    reader.Read();
+                    schema = reader.GetString(0);
+                    name = reader.GetString(1);
+                }
+
+                Console.WriteLine($"[{schema}].[{name}]");
+
+                cmd.CommandText = $"select * from {dictionary.Name}";
+                var reader2 = cmd.ExecuteReader();
+                StreamWriter streamWriter = null;
+                CsvWriter csvWriter = null;
+                try
+                {
+                    streamWriter = new StreamWriter(Path.Combine(dataDir, $"{schema}.{name}.csv"));
+                    csvWriter = new CsvWriter(streamWriter);
+
+                    using (var reader = cmd.ExecuteReader())
                     {
                         for (int i = 0; i < reader.FieldCount; ++i)
                         {
-                            Console.Write("{0};", reader.GetValue(i));
+                            csvWriter.WriteField(reader.GetName(i));
                         }
-                        Console.WriteLine();
+                        csvWriter.NextRecord();
+
+                        while (reader.Read())
+                        {
+                            for (int i = 0; i < reader.FieldCount; ++i)
+                            {
+                                csvWriter.WriteField(reader.GetValue(i));
+                            }
+                            csvWriter.NextRecord();
+                        }
                     }
                 }
+                finally
+                {
+                    if (csvWriter != null)
+                        csvWriter.Dispose();
 
-                // TODO: Finish the export.
+                    if (streamWriter != null)
+                        streamWriter.Dispose();
+
+                    if (reader2 != null)
+                        reader2.Dispose();
+                }
             }
         }
     }

@@ -167,7 +167,7 @@ namespace DBVer
             using (var connection = new SqlConnection(builder.ToString()))
             {
                 connection.Open();
-                dictionaryExporter.Run(connection);
+                dictionaryExporter.Run(connection, outputDir);
             }
         }
 
