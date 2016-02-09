@@ -4,6 +4,7 @@ using System;
 using System.Data;
 using System.Data.SqlClient;
 using System.IO;
+using CsvHelper.Configuration;
 
 namespace DBVer.Tools
 {
@@ -60,13 +61,12 @@ namespace DBVer.Tools
                 Console.WriteLine($"[{schema}].[{name}]");
 
                 cmd.CommandText = $"select * from {dictionary.Name}";
-                var reader2 = cmd.ExecuteReader();
                 StreamWriter streamWriter = null;
                 CsvWriter csvWriter = null;
                 try
                 {
                     streamWriter = new StreamWriter(Path.Combine(dataDir, $"{schema}.{name}.csv"));
-                    csvWriter = new CsvWriter(streamWriter);
+                    csvWriter = new CsvWriter(streamWriter, new CsvConfiguration());
 
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -93,9 +93,6 @@ namespace DBVer.Tools
 
                     if (streamWriter != null)
                         streamWriter.Dispose();
-
-                    if (reader2 != null)
-                        reader2.Dispose();
                 }
             }
         }
