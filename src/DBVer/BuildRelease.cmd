@@ -1,1 +1,0 @@
-"C:\Program Files (x86)\MSBuild\14.0\Bin\msbuild.exe" DBVer.sln /t:Build /p:Configuration=Release

@@ -6,3 +6,5 @@ src/DBVer/.vs/
 *.user
 src/DBVer/Properties/HeavysoftVersion.cs
 *.bak
+src/DBVer/Distr/
+*.exe
