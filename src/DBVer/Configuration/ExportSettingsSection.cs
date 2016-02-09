@@ -15,7 +15,7 @@ namespace DBVer.Configuration
 
         public static ExportSettingsSection ReadFromConfig()
         {
-            return ConfigurationManager.GetSection("mapping") as ExportSettingsSection;
+            return ConfigurationManager.GetSection("exportSettings") as ExportSettingsSection;
         }
     }
 }

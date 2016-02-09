@@ -33,16 +33,36 @@ namespace DBVer.Tools
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandType = CommandType.Text;
-                cmd.CommandText = "select object_id from sys.tables where name = @Name";
+                cmd.CommandText = "select '[' + S.name + '].[' + T.name + ']' FROM sys.tables T JOIN sys.schemas S ON T.schema_id = S.schema_id where T.name = @Name";
                 cmd.Parameters.AddWithValue("@Name", dictionary.Name);
 
-                var result = cmd.ExecuteScalar();
-                if (Convert.IsDBNull(result))
+                var fullName = cmd.ExecuteScalar();
+                if (fullName == null)
                 {
                     Console.WriteLine("Warning: Dictionary {0} not found.", dictionary.Name);
+                    return;
                 }
 
+                Console.WriteLine(fullName);
+
                 cmd.CommandText = $"select * from {dictionary.Name}";
+                using (var reader = cmd.ExecuteReader())
+                {
+                    for (int i = 0; i < reader.FieldCount; ++i)
+                    {
+                        Console.Write("{0};", reader.GetName(i));
+                    }
+                    Console.WriteLine();
+
+                    while (reader.Read())
+                    {
+                        for (int i = 0; i < reader.FieldCount; ++i)
+                        {
+                            Console.Write("{0};", reader.GetValue(i));
+                        }
+                        Console.WriteLine();
+                    }
+                }
 
                 // TODO: Finish the export.
             }

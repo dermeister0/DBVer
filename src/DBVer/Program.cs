@@ -164,8 +164,9 @@ namespace DBVer
 
             var builder = new SqlConnectionStringBuilder()
                 { DataSource = serverHost, InitialCatalog = dbName, UserID = userName, Password = password };
-            using (var connection = new SqlConnection())
+            using (var connection = new SqlConnection(builder.ToString()))
             {
+                connection.Open();
                 dictionaryExporter.Run(connection);
             }
         }
