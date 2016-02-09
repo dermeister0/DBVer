@@ -8,18 +8,20 @@ namespace DBVer.Mapping
     internal class NameReplacer
     {
         private Dictionary<ObjectType, Dictionary<Regex, string>> mappings;
+        private ExportSettingsSection exportSettingsSection;
 
-        public NameReplacer()
+        public NameReplacer(ExportSettingsSection exportSettingsSection)
         {
+            this.exportSettingsSection = exportSettingsSection;
+
             Load();
         }
 
         private void Load()
         {
             mappings = new Dictionary<ObjectType, Dictionary<Regex, string>>();
-            var mappingSection = MappingSection.ReadFromConfig();
 
-            foreach (NameReplacementGroup group in mappingSection.NameReplacementGroups)
+            foreach (NameReplacementGroup group in exportSettingsSection.NameReplacementGroups)
             {
                 var replacementSet = group.Definitions.Cast<NameReplacementDefinition>()
                     .ToDictionary(definition => new Regex(definition.Pattern), definition => definition.Replacement);
