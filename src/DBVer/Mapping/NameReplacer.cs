@@ -11,6 +11,21 @@ namespace DBVer.Mapping
         public Dictionary<Regex, string> ContentMappings { get; set; }
     }
 
+    internal class NameReplacementResult
+    {
+        private ReplacementConfig config;
+
+        public string OldName { get; }
+        public string NewName { get; }
+
+        public NameReplacementResult(ReplacementConfig config, string oldName, string newName)
+        {
+            this.config = config;
+            OldName = oldName;
+            NewName = newName;
+        }
+    }
+
     internal class NameReplacer
     {
         private Dictionary<ObjectType, Dictionary<Regex, ReplacementConfig>> mappings;
