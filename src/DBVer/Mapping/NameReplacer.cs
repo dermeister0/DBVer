@@ -5,9 +5,15 @@ using DBVer.Configuration;
 
 namespace DBVer.Mapping
 {
+    internal class ReplacementConfig
+    {
+        public string NamePattern { get; set; }
+        public Dictionary<Regex, string> ContentMappings { get; set; }
+    }
+
     internal class NameReplacer
     {
-        private Dictionary<ObjectType, Dictionary<Regex, string>> mappings;
+        private Dictionary<ObjectType, Dictionary<Regex, ReplacementConfig>> mappings;
         private ExportSettingsSection exportSettingsSection;
 
         public NameReplacer(ExportSettingsSection exportSettingsSection)
@@ -19,12 +25,19 @@ namespace DBVer.Mapping
 
         private void Load()
         {
-            mappings = new Dictionary<ObjectType, Dictionary<Regex, string>>();
+            mappings = new Dictionary<ObjectType, Dictionary<Regex, ReplacementConfig>>();
 
             foreach (NameReplacementGroup group in exportSettingsSection.NameReplacementGroups)
             {
                 var replacementSet = group.Definitions.Cast<NameReplacementDefinition>()
-                    .ToDictionary(definition => new Regex(definition.Pattern), definition => definition.Replacement);
+                    .ToDictionary(definition => new Regex(definition.Pattern),
+                        definition => new ReplacementConfig
+                            {
+                                NamePattern = definition.Replacement,
+                                ContentMappings = definition.ContentReplacements.Count > 0
+                                    ? definition.ContentReplacements.Cast<ContentReplacementDefinition>().ToDictionary(d => new Regex(d.Pattern), d => d.Replacement)
+                                    : null
+                            });
                 mappings[group.Type] = replacementSet;
             }
         }
@@ -38,7 +51,7 @@ namespace DBVer.Mapping
             {
                 if (definition.Key.IsMatch(name))
                 {
-                    return definition.Key.Replace(name, definition.Value);
+                    return definition.Key.Replace(name, definition.Value.NamePattern);
                 }
             }
 
