@@ -73,6 +73,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Configuration\ContentReplacementDefinition.cs" />
+    <Compile Include="Configuration\ContentReplacementDefinitionCollection.cs" />
     <Compile Include="Configuration\DictionaryDefinitionCollection.cs" />
     <Compile Include="Configuration\DictionaryDefinition.cs" />
     <Compile Include="Configuration\ExportSettingsSection.cs" />

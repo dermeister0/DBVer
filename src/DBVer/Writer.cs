@@ -2,6 +2,7 @@
 using System.Collections.Specialized;
 using System.IO;
 using System.Text;
+using DBVer.Mapping;
 
 namespace DBVer
 {
@@ -24,7 +25,7 @@ namespace DBVer
             this.multipleFilesPerObject = multipleFilesPerObject;
         }
 
-        public void WriteResult(StringCollection lines, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
+        public void WriteResult(StringCollection lines, string schema, NameReplacementResult replacementResult, ObjectType objectType, string dbName, string outputDir)
         {
             string path = Path.Combine(outputDir, GetFolderByType(objectType));
 
@@ -35,24 +36,24 @@ namespace DBVer
 
             if (objectType != ObjectType.Table || !multipleFilesPerObject)
             {
-                AddLines(result, lines, dbName);
+                AddLines(result, lines, dbName, StatementMode.All, replacementResult);
 
-                string fileName = Path.Combine(path, $"{objectName}.sql");
+                string fileName = Path.Combine(path, $"{replacementResult.NewName}.sql");
                 File.WriteAllText(fileName, result.ToString());
             }
             else
             {
-                string fileName = Path.Combine(path, $"{objectName}{{0}}.sql");
+                string fileName = Path.Combine(path, $"{replacementResult.NewName}{{0}}.sql");
 
-                AddLines(result, lines, dbName, StatementMode.Table);
+                AddLines(result, lines, dbName, StatementMode.Table, replacementResult);
                 File.WriteAllText(string.Format(fileName, ""), result.ToString());
 
                 result.Clear();
-                AddLines(result, lines, dbName, StatementMode.Indexes);
+                AddLines(result, lines, dbName, StatementMode.Indexes, replacementResult);
                 File.WriteAllText(string.Format(fileName, "_Ind"), result.ToString());
 
                 result.Clear();
-                AddLines(result, lines, dbName, StatementMode.Constraints);
+                AddLines(result, lines, dbName, StatementMode.Constraints, replacementResult);
                 File.WriteAllText(string.Format(fileName, "_Con"), result.ToString());
             }
         }
@@ -85,18 +86,19 @@ namespace DBVer
             }
         }
 
-        private string ProcessBody(string body)
+        private string ProcessBody(string body, NameReplacementResult replacementResult)
         {
-            return body.Replace("\r", "").Replace("\n", "\r\n").Replace("\t", "    ").TrimEnd(' ', '\t');
+            var result = body.Replace("\r", "").Replace("\n", "\r\n").Replace("\t", "    ").TrimEnd(' ', '\t');
+            return replacementResult.ReplaceContent(result);
         }
 
-        private void AddLines(StringBuilder result, StringCollection strings, string dbName, StatementMode mode = StatementMode.All)
+        private void AddLines(StringBuilder result, StringCollection strings, string dbName, StatementMode mode, NameReplacementResult replacementResult)
         {
             AddHeader(result, strings, dbName);
 
             foreach (var s in strings)
             {
-                var body = ProcessBody(s);
+                var body = ProcessBody(s, replacementResult);
 
                 if (IsSetStatement(s))
                 {
