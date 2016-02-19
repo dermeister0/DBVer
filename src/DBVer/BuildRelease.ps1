@@ -28,3 +28,5 @@ $ilMergePath = $packagesPath + '\ilmerge.2.14.1208\tools\ILMerge.exe'
 Copy-Item "$releasePath\DBVer.exe.config" $outputPath
 
 &"${env:ProgramFiles}\7-Zip\7z.exe" a "$outputPath\DBVer0.0.0.zip" "$outputPath\*"
+
+"`nhttps://github.com/dermeister0/DBVer/releases"
