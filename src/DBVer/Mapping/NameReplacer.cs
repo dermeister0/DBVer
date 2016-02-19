@@ -24,6 +24,22 @@ namespace DBVer.Mapping
             OldName = oldName;
             NewName = newName;
         }
+
+        public string ReplaceContent(string content)
+        {
+            if (config?.ContentMappings == null)
+                return content;
+
+            foreach (var definition in config.ContentMappings)
+            {
+                if (definition.Key.IsMatch(content))
+                {
+                    content = definition.Key.Replace(content, definition.Value);
+                }
+            }
+
+            return content;
+        }
     }
 
     internal class NameReplacer
@@ -57,20 +73,22 @@ namespace DBVer.Mapping
             }
         }
 
-        public string ReplaceName(string name, ObjectType type)
+        public NameReplacementResult ReplaceName(string name, ObjectType type)
         {
+            var result = new NameReplacementResult(null, name, name);
+
             if (!mappings.ContainsKey(type))
-                return name;
+                return result;
 
             foreach (var definition in mappings[type])
             {
                 if (definition.Key.IsMatch(name))
                 {
-                    return definition.Key.Replace(name, definition.Value.NamePattern);
+                    return new NameReplacementResult(definition.Value, name, definition.Key.Replace(name, definition.Value.NamePattern));
                 }
             }
 
-            return name;
+            return result;
         }
     }
 }
