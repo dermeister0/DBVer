@@ -173,13 +173,13 @@ namespace DBVer
 
         private void ProcessObject(ServerInfo info, string urn, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
         {
-            var newName = nameReplacer.ReplaceName(objectName, objectType);
-            if (string.IsNullOrEmpty(newName))
+            var replacementResult = nameReplacer.ReplaceName(objectName, objectType);
+            if (string.IsNullOrEmpty(replacementResult.NewName))
                 return;
 
-            WriteLog(schema, string.CompareOrdinal(objectName, newName) != 0 ? $"{objectName} -> {newName}" : objectName, objectType);
+            WriteLog(schema, string.CompareOrdinal(objectName, replacementResult.NewName) != 0 ? $"{objectName} -> {replacementResult.NewName}" : objectName, objectType);
 
-            if (processedMap.Contains(schema, newName, objectType))
+            if (processedMap.Contains(schema, replacementResult.NewName, objectType))
                 return;
 
             var db = info.Server.Databases[dbName];
@@ -202,7 +202,7 @@ namespace DBVer
             urns[0] = urn;
 
             var lines = info.Scripter.Script(urns);
-            WriteResult(lines, schema, newName, objectType, db.Name, outputDir);
+            WriteResult(lines, schema, replacementResult, objectType, db.Name, outputDir);
 
             if (objectType == ObjectType.Table)
             {
@@ -219,19 +219,19 @@ namespace DBVer
 
             foreach (Trigger trigger in table.Triggers)
             {
-                var newName = nameReplacer.ReplaceName(trigger.Name, objectType);
-                if (string.IsNullOrEmpty(newName))
+                var replacementResult = nameReplacer.ReplaceName(trigger.Name, objectType);
+                if (string.IsNullOrEmpty(replacementResult.NewName))
                     continue;
 
-                var changedName = string.CompareOrdinal(trigger.Name, newName) != 0 ? $"{trigger.Name} -> {newName}" : newName;
+                var changedName = string.CompareOrdinal(trigger.Name, replacementResult.NewName) != 0 ? $"{trigger.Name} -> {replacementResult.NewName}" : trigger.Name;
                 Console.WriteLine($"    [{schema}].[{changedName}]   {objectType}");
 
-                if (processedMap.Contains(schema, newName, objectType))
+                if (processedMap.Contains(schema, replacementResult.NewName, objectType))
                     continue;
 
                 urns[0] = trigger.Urn;
                 var lines = scripter.Script(urns);
-                WriteResult(lines, schema, newName, objectType, dbName, outputDir);
+                WriteResult(lines, schema, replacementResult, objectType, dbName, outputDir);
             }
         }
 
@@ -248,11 +248,11 @@ namespace DBVer
             return (ObjectType) Enum.Parse(typeof (ObjectType), objectType);
         }
 
-        private void WriteResult(StringCollection lines, string schema, string objectName, ObjectType objectType, string dbName, string outputDir)
+        private void WriteResult(StringCollection lines, string schema, NameReplacementResult replacementResult, ObjectType objectType, string dbName, string outputDir)
         {
-            outputWriter.WriteResult(lines, schema, objectName, objectType, dbName, outputDir);
+            outputWriter.WriteResult(lines, schema, replacementResult, objectType, dbName, outputDir);
 
-            processedMap.Add(schema, objectName, objectType);
+            processedMap.Add(schema, replacementResult.NewName, objectType);
         }
     }
 }

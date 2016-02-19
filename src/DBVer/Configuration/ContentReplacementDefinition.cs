@@ -2,7 +2,7 @@
 
 namespace DBVer.Configuration
 {
-    public class NameReplacementDefinition : ConfigurationElement
+    public class ContentReplacementDefinition : ConfigurationElement
     {
         [ConfigurationProperty("pattern", IsRequired = true)]
         public string Pattern
@@ -17,8 +17,5 @@ namespace DBVer.Configuration
             get { return (string)this["replacement"]; }
             set { this["replacement"] = value; }
         }
-
-        [ConfigurationProperty("", IsDefaultCollection = true)]
-        public ContentReplacementDefinitionCollection ContentReplacements => (ContentReplacementDefinitionCollection)base[""];
     }
 }
