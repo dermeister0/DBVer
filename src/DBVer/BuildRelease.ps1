@@ -14,7 +14,7 @@ if (Test-Path $outputPath)
     Remove-Item -recurse -force $outputPath
 }
 
-New-Item $outputPath -ItemType directory
+New-Item $outputPath -ItemType directory -ErrorAction SilentlyContinue
 
 $nugetExePath = "$PSScriptRoot\Scripts\nuget.exe"
 $packagesPath = "$PSScriptRoot\packages"
